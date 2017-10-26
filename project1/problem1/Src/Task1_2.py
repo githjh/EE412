@@ -256,20 +256,21 @@ class Task1(GroupCard):
 
                 a_group_card = GroupCard (list_card, predicted_hand)
                 copy_group_card = a_group_card.copy ()
-                modified_group_card = a_group_card.copy ()
-                list_modified_group_card = []
-                print ("Init: ")
-                print (a_group_card)
+                #modified_group_card = a_group_card.copy ()
+                #list_modified_group_card = []
+                #print ("Init: ")
+                #print (a_group_card)
 
-                break_flag = 0
-                largest_hand = predicted_hand
+                #break_flag = 0
+                #largest_hand = predicted_hand
+                matrix = np.empty (shape = [0, 10])
                            
                 for j in range (5):
-                    if break_flag == 1:
-                        break
+                    #if break_flag == 1:
+                        #break
                     for suit in range (1, 5):
-                        if break_flag == 1:
-                            break
+                        #if break_flag == 1:
+                            #break
                         for rank in range (2, 15):
                             new_card = Card (suit, rank)
                             if new_card.is_same_card (card1) or new_card.is_same_card (card2) or new_card.is_same_card (card3) or new_card.is_same_card (card4) or new_card.is_same_card (card5):
@@ -278,7 +279,7 @@ class Task1(GroupCard):
                                 #print ("same card")
                                 pass
                             else:
-                                #print ("try to modify")
+                                """#print ("try to modify")
                                 copy_group_card.modify_a_card (new_card, j)
                                 predicted_hand = sess.run (tf.argmax(prediction, 1), feed_dict={X: copy_group_card.get_group_card_arr(), dropout:self.DROP_OUT})
                                 #print ("predicted_hand: %d, largest hand: %d" % (predicted_hand, largest_hand))
@@ -293,13 +294,19 @@ class Task1(GroupCard):
                                     modified_group_card = copy_group_card.copy()
                                     modified_group_card.change_hand (largest_hand)
                                 copy_group_card = a_group_card.copy ()
-                                #print (copy_group_card)
+                                #print (copy_group_card)"""
+                                copy_group_card.modify_a_card (new_card, j)
+                                matrix = np.append (matrix, copy_group_card.get_group_card_arr())
+                                
+                                copy_group_card = a_group_card.copy ()
                                     
-                print ("Changed to:")
-                print (modified_group_card)
-                list_modified_group_card.append (modified_group_card)
+                #print ("Changed to:")
+                #print (modified_group_card)
+                #list_modified_group_card.append (modified_group_card)
             
-            np.savetxt ("../output_task2.txt", list_modified_group_card)
+            #np.savetxt ("../output_task2.txt", list_modified_group_card)
+            print ("matrix:", matrix.shape)
+            sys.exit (-1)
                 
     def test_test_data (self):
         """ Modify a card"""
