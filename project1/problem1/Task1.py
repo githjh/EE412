@@ -11,7 +11,7 @@ from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
 import time
 import argparse
-import os
+import os, sys
 
 # Read training data from csv train file
 train_headers = ["suit1","rank1","suit2","rank2","suit3","rank3","suit4","rank4","suit5","rank5","hand"]
@@ -35,6 +35,12 @@ class Task1(object):
         self.batch_size = args.batch_size
         self.hidden_layer_num = args.hidden_layer_num
         self.neuron_num = args.neuron_num
+        self.model_dir = args.model_dir
+        self.saved_period = args.saved_period
+
+        self.learning_rate = args.learning_rate
+        self.decay_step = args.decay_step
+        self.decay_rate = args.decay_rate
 
         self.train_file = train_file
         self.test_data_file = test_data_file
@@ -113,8 +119,14 @@ class Task1(object):
 
         X, Y, logits = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
 
+        num_batches_per_epoch = int(len(self.train_data) / self.batch_size)
+        decay_steps = int(num_batches_per_epoch * self.decay_step)
+        #decay_steps = num_batches_per_epoch
+        global_step = tf.Variable(0, trainable = False)
+        learning_rate = tf.train.exponential_decay(self.learning_rate, global_step, decay_steps, self.decay_rate, staircase = True)
+
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y))
-        optimizer = tf.train.AdamOptimizer(learning_rate = 0.001).minimize(cost)
+        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=global_step)
 
         """ Evaluate model """
         is_correct = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(Y, 1))
@@ -122,6 +134,7 @@ class Task1(object):
 
         """ Initialize the variables with default values"""
         init = tf.global_variables_initializer()
+        saver = tf.train.Saver()
 
         with tf.Session() as sess:
 
@@ -160,20 +173,29 @@ class Task1(object):
                     if (index_counter >= total_batch):
                         index_counter = 0
 
-                    _, cost_val = sess.run([optimizer, cost], feed_dict={X: batch_x, Y: batch_y_encode})
+                    _, cost_val, lr = sess.run([optimizer, cost, learning_rate], feed_dict={X: batch_x, Y: batch_y_encode})
                     total_cost += cost_val
                     #print ("cost_val:", cost_val)
 
-                print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch))
+                print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch), 'learning_rate = {:.5f}'.format(lr))
 
                 #TODO: training data permutation
                 train_set_shuffled = np.random.permutation(train_set)
                 train_data_shuffled = train_set_shuffled [:, 0:train_data.shape[1]]
                 train_hand_shuffled = train_set_shuffled [:, train_data.shape[1]:]
 
+                if epoch % self.saved_period == 0 and epoch != 0:
+                    model_path = self.model_dir + '/' + 'checkpoint_epoch_{}'.format(epoch)
+                    save_path = saver.save(sess, model_path)
+                    print('Model saved in file: %s' % save_path)
+
             print ("Training finished!")
             stop_time = time.time()
             print ("Training time (s):", stop_time - start_time)
+
+            model_path = self.model_dir + '/' + 'checkpoint_final'
+            save_path = saver.save(sess, model_path)
+            print('Model saved in file: %s' % save_path)
 
     def test_encode (self):
 
@@ -188,12 +210,17 @@ if __name__ == '__main__':
 
     #configuration
     parser.add_argument('--gpu_idx', type=str, default = '0')
+    parser.add_argument('--model_dir', type=str, default = './checkpoint')
     parser.add_argument('--mode_name', type=str)
     parser.add_argument('--test', type=bool, default=False)
+    parser.add_argument('--saved_period', type=int, default=10, help='save checkpoint per X epoch')
 
     #hyper parameter
     parser.add_argument('--epoch', type=int, default = 100)
     parser.add_argument('--batch_size', type=int, default = 100)
+    parser.add_argument('--learning_rate', type=float, default=0.01)
+    parser.add_argument('--decay_rate', type=float, default=0.5)
+    parser.add_argument('--decay_step', type=int, default=20)
 
     #network parameter
     parser.add_argument('--dim_hand', type=int, default=10)
@@ -201,6 +228,9 @@ if __name__ == '__main__':
     parser.add_argument('--neuron_num', type=int, default = 1000)
 
     args = parser.parse_args()
+
+    if not os.path.exists(args.model_dir):
+        os.makedirs(args.model_dir)
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_idx
 
