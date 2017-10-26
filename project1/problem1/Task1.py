@@ -35,12 +35,14 @@ class Task1(object):
         self.batch_size = args.batch_size
         self.hidden_layer_num = args.hidden_layer_num
         self.neuron_num = args.neuron_num
-        self.model_dir = args.model_dir
-        self.saved_period = args.saved_period
 
         self.learning_rate = args.learning_rate
         self.decay_step = args.decay_step
         self.decay_rate = args.decay_rate
+        self.saved_period = args.saved_period
+
+        self.model_dir = args.model_dir
+        self.model_name = args.model_name
 
         self.train_file = train_file
         self.test_data_file = test_data_file
@@ -49,6 +51,8 @@ class Task1(object):
         self.train_data = self.get_data (self.train_file, train_headers, train_dtype_dict)[0]
         self.train_hand = self.get_data (self.train_file, train_headers, train_dtype_dict)[1]
         self.test_data = self.get_data (self.test_data_file, data_test_headers, data_test_dtype_dict)
+        print(self.test_data.shape)
+        sys.exit(-1)
         self.test_hand = self.get_data (self.test_label_file, hand_test_headers, hand_test_dtype_dict)
         self.enc = OneHotEncoder()
         self.enc.fit(np.array ([[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]]))
@@ -197,6 +201,22 @@ class Task1(object):
             save_path = saver.save(sess, model_path)
             print('Model saved in file: %s' % save_path)
 
+    def test(self):
+        if self.model_name == None:
+            print('Model does not exist')
+            sys.exit(-1)
+
+        ckpt_path = self.model_dir + '/' + self.model_name
+        with tf.Session() as sess:
+            saver.restore(sess, ckpt_path)
+
+            #TODO: create batch from test data
+            #test_data -> all_possible_case
+
+            #TODO: feed test data
+
+            #test_output = sess.run([logits], feed_dict={X: BATCH_TEST_DATA})
+
     def test_encode (self):
 
         batch_y =self.train_hand [0 : 2]
@@ -211,7 +231,7 @@ if __name__ == '__main__':
     #configuration
     parser.add_argument('--gpu_idx', type=str, default = '0')
     parser.add_argument('--model_dir', type=str, default = './checkpoint')
-    parser.add_argument('--mode_name', type=str)
+    parser.add_argument('--model_name', type=str)
     parser.add_argument('--test', type=bool, default=False)
     parser.add_argument('--saved_period', type=int, default=10, help='save checkpoint per X epoch')
 
