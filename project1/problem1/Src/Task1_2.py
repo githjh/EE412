@@ -238,10 +238,10 @@ class Task1(GroupCard):
                         for rank in range (2, 15):
                             new_card = Card (suit, rank)
                             if new_card.is_same_card (card1) or new_card.is_same_card (card2) or new_card.is_same_card (card3) or new_card.is_same_card (card4) or new_card.is_same_card (card5):
-                                break
+                                continue
                             else:
                                 copy_group_card.modify_a_card (new_card, j)
-                                predicted_hand = sess.run (tf.argmax(prediction, 1), feed_dict={X: copy_group_card, dropout:self.DROP_OUT})
+                                predicted_hand = sess.run (tf.argmax(prediction, 1), feed_dict={X: copy_group_card.get_group_card_arr(), dropout:self.DROP_OUT})
                                 if predicted_hand > largest_hand:
                                     largest_hand = predicted_hand
                                     modified_group_card = copy_group_card
@@ -327,7 +327,7 @@ class Task1(GroupCard):
         no_unit_in_a_hidden_layer = 1000
         train_data = self.train_data
         train_hand = self.train_hand
-        no_epoch = 100#300
+        no_epoch = 1#300
         batch_size = 100
         total_batch = int(len(self.train_data) / batch_size)
         
