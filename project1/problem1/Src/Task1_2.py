@@ -11,6 +11,7 @@ from sklearn.preprocessing import OneHotEncoder
 #import matplotlib.pyplot as plt
 import time
 #from multimethod import multimethod
+import copy
 
 # Read training data from csv train file
 train_headers = ["suit1","rank1","suit2","rank2","suit3","rank3","suit4","rank4","suit5","rank5","hand"]
@@ -21,9 +22,9 @@ train_dtype_dict = {"suit1":int,"rank1":int,"suit2":int,"rank2":int,"suit3":int,
 data_test_dtype_dict = {"suit1":int,"rank1":int,"suit2":int,"rank2":int,"suit3":int,"rank3":int,"suit4":int,"rank4":int,"suit5":int,"rank5":int}
 hand_test_dtype_dict = {"hand":int}
 
-train_file = "../Data/train_data.csv"
-test_data_file = "../Data/test_data.csv"
-test_label_file = "../Data/test_hand.csv"
+train_file = "../train_data.csv"
+test_data_file = "../test_data.csv"
+test_label_file = "../test_hand.csv"
 
 class Card (object):
     def __init__ (self, suit, rank):
@@ -45,6 +46,9 @@ class Card (object):
     def get_card (self):
         list_suit_rank = [self.suit, self.rank]
         return list_suit_rank
+
+    def __str__ (self, pre_str = "") :
+        return pre_str + str (self.get_card())
     
     
 class GroupCard (Card):
@@ -60,7 +64,7 @@ class GroupCard (Card):
         self.hand = hand
     
     def copy (self):
-        return GroupCard (self.list_cards, self.hand)
+        return GroupCard (copy.copy (self.list_cards), copy.copy (self.hand))
     
     def modify_a_card (self, new_card, index):
         self.list_cards[index] = new_card
@@ -74,11 +78,23 @@ class GroupCard (Card):
             list_suit_rank += self.list_cards[i].get_card()
         return list_suit_rank
     
+    def zeros (self):
+        card1 = Card (0, 0)   
+        card2 = Card (0, 0)
+        card3 = Card (0, 0)
+        card4 = Card (0, 0)
+        card5 = Card (0, 0)
+        
+        list_card = [card1, card2, card3, card4, card5]
+        
+        groupCard = GroupCard (list_card)
+        return groupCard
+
     def get_group_card_arr (self):
         return np.array (self.get_group_card()).reshape (1, 2 * self.size_group)
     
-    def __str__ (self):
-        return str (self.get_group_card_arr()) + "-" + str (self.hand)
+    def __str__ (self, pre_str = "") :
+        return pre_str + str (self.get_group_card_arr()) + "-" + str (self.hand)
 
 
   
@@ -213,13 +229,23 @@ class Task1(GroupCard):
             
             #print ("test predicted hand:", sess.run (tf.argmax(prediction, 1)[0:10], feed_dict={X: self.test_data, dropout:self.DROP_OUT}))
             #print ("test ground truth hand:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: test_hand_encode}))
-            np.savetxt ("../Results/output_task1.txt", sess.run (tf.argmax(prediction, 1), feed_dict={X: self.test_data, dropout:self.DROP_OUT}), fmt = "%d")
+            predicted_hand_arr = sess.run (tf.argmax(prediction, 1), feed_dict={X: self.test_data, dropout:self.DROP_OUT})
+            np.savetxt ("../output_task1.txt", predicted_hand_arr, fmt = "%d")
             
             
             """ Modify a card"""
+            start_modifying_time = time.time()
+
             test_data = self.test_data
             test_hand = self.test_hand
             for i in range (len (test_data)):
+                   
+                predicted_hand = predicted_hand_arr[i]#sess.run (tf.argmax(prediction, 1), feed_dict={X: self.test_data[i], dropout:self.DROP_OUT})
+                if predicted_hand == 9:
+                    print ("No change")
+                    continue
+
+                print ("Group card ", i)
                 card1 = Card (test_data[i][0], test_data[i][1])   
                 card2 = Card (test_data[i][2], test_data[i][3])   
                 card3 = Card (test_data[i][4], test_data[i][5])   
@@ -227,28 +253,53 @@ class Task1(GroupCard):
                 card5 = Card (test_data[i][8], test_data[i][9])   
                     
                 list_card = [card1, card2, card3, card4, card5]
-                hand = test_hand[i][0]
-                largest_hand = hand
-                   
-                a_group_card = GroupCard (list_card, hand)
+
+                a_group_card = GroupCard (list_card, predicted_hand)
                 copy_group_card = a_group_card.copy ()
+                modified_group_card = a_group_card.copy ()
+                list_modified_group_card = []
+                print ("Init: ")
+                print (a_group_card)
+
+                break_flag = 0
+                largest_hand = predicted_hand
                            
                 for j in range (5):
+                    if break_flag == 1:
+                        break
                     for suit in range (1, 5):
+                        if break_flag == 1:
+                            break
                         for rank in range (2, 15):
                             new_card = Card (suit, rank)
                             if new_card.is_same_card (card1) or new_card.is_same_card (card2) or new_card.is_same_card (card3) or new_card.is_same_card (card4) or new_card.is_same_card (card5):
-                                break
+                                #print ("New card:")
+                                #print (new_card)
+                                #print ("same card")
+                                pass
                             else:
+                                #print ("try to modify")
                                 copy_group_card.modify_a_card (new_card, j)
-                                predicted_hand = sess.run (tf.argmax(prediction, 1), feed_dict={X: copy_group_card, dropout:self.DROP_OUT})
-                                if predicted_hand > largest_hand:
+                                predicted_hand = sess.run (tf.argmax(prediction, 1), feed_dict={X: copy_group_card.get_group_card_arr(), dropout:self.DROP_OUT})
+                                #print ("predicted_hand: %d, largest hand: %d" % (predicted_hand, largest_hand))
+                                if predicted_hand == 9:
+                                    break_flag = 1
+                                    modified_group_card = copy_group_card.copy()
+                                    modified_group_card.change_hand (largest_hand)
+                                    break
+                                elif predicted_hand > largest_hand:
+                                    #print ("predicted_hand: %d, largest hand: %d" % (predicted_hand, largest_hand))
                                     largest_hand = predicted_hand
-                                    modified_group_card = copy_group_card
+                                    modified_group_card = copy_group_card.copy()
                                     modified_group_card.change_hand (largest_hand)
                                 copy_group_card = a_group_card.copy ()
+                                #print (copy_group_card)
                                     
+                print ("Changed to:")
                 print (modified_group_card)
+                list_modified_group_card.append (modified_group_card)
+            
+            np.savetxt ("../output_task2.txt", list_modified_group_card)
                 
     def test_test_data (self):
         """ Modify a card"""
@@ -295,12 +346,14 @@ class Task1(GroupCard):
         list_card1 = [card1, card2, card3, card4, card5]
         
         groupCard1 = GroupCard (list_card1)
+        groupCard2 = groupCard1.copy ()
         #test_grp_card = groupCard1.get_group_card_arr()
         print (groupCard1)
         
         new_card = Card (1, 7)
-        groupCard1.modify_a_card (new_card, 3)
+        groupCard2.modify_a_card (new_card, 3)
         print (groupCard1)
+        print (groupCard2)
     
     def test (self):
         X_train = self.train_data
@@ -327,7 +380,7 @@ class Task1(GroupCard):
         no_unit_in_a_hidden_layer = 1000
         train_data = self.train_data
         train_hand = self.train_hand
-        no_epoch = 100#300
+        no_epoch = 1#300
         batch_size = 100
         total_batch = int(len(self.train_data) / batch_size)
         
