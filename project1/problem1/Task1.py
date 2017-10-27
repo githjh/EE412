@@ -40,6 +40,7 @@ class Task1(object):
         self.decay_step = args.decay_step
         self.decay_rate = args.decay_rate
         self.saved_period = args.saved_period
+        self.test = args.test
 
         self.model_dir = args.model_dir
         self.model_name = args.model_name
@@ -51,8 +52,6 @@ class Task1(object):
         self.train_data = self.get_data (self.train_file, train_headers, train_dtype_dict)[0]
         self.train_hand = self.get_data (self.train_file, train_headers, train_dtype_dict)[1]
         self.test_data = self.get_data (self.test_data_file, data_test_headers, data_test_dtype_dict)
-        print(self.test_data.shape)
-        sys.exit(-1)
         self.test_hand = self.get_data (self.test_label_file, hand_test_headers, hand_test_dtype_dict)
         self.enc = OneHotEncoder()
         self.enc.fit(np.array ([[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]]))
@@ -87,41 +86,40 @@ class Task1(object):
 
         return Z
 
-    def test (self):
-        X_train = self.train_data
-        y_train = self.train_hand
-
-        X_test = self.test_data
-        y_test = self.test_hand
-
-        print ("X_train:", X_train.shape)
-        print ("y_train:", y_train.shape)
-
-        print ("X_test:", X_test.shape)
-        print ("y_test:", y_test.shape)
-
-    #create model
+        #create model
     def build_model (self, dim_hand, no_unit_in_a_hidden_layer, layer_num, no_epoch, batch_size):
+        weights = []
+
         X = tf.placeholder(tf.float32, [None, dim_hand])
         Y = tf.placeholder(tf.float32, [None, dim_hand])
 
         #dropout = tf.placeholder(tf.float32, name='dropout')
 
         W1 = tf.Variable(tf.random_normal([dim_hand, no_unit_in_a_hidden_layer], stddev=0.01))
-        L1 = tf.nn.relu(tf.matmul(X, W1))
+        B1 = tf.Variable(tf.random_normal([no_unit_in_a_hidden_layer], stddev=0.01))
+        L1 = tf.nn.relu(tf.nn.bias_add(tf.matmul(X, W1), B1))
 
         W2 = tf.Variable(tf.random_normal([no_unit_in_a_hidden_layer, no_unit_in_a_hidden_layer], stddev=0.01))
-        L2 = tf.nn.relu(tf.matmul(L1, W2))
+        B2 = tf.Variable(tf.random_normal([no_unit_in_a_hidden_layer], stddev=0.01))
+        L2 = tf.nn.relu(tf.nn.bias_add(tf.matmul(L1, W2), B2))
         #L2_hat = tf.nn.dropout(L2, dropout, name='relu_dropout')
 
         W3 = tf.Variable(tf.random_normal([no_unit_in_a_hidden_layer, dim_hand], stddev=0.01))
-        logits = tf.matmul(L2, W3)
+        B3 = tf.Variable(tf.random_normal([dim_hand], stddev=0.01))
+        logits = tf.nn.bias_add(tf.matmul(L2, W3), B3)
 
-        return X, Y, logits
+        weights.append(W1)
+        weights.append(W2)
+        weights.append(W3)
+        weights.append(B1)
+        weights.append(B2)
+        weights.append(B3)
 
-    def train(self):
+        return X, Y, logits, weights
 
-        X, Y, logits = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
+    def train_nn(self):
+
+        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
 
         num_batches_per_epoch = int(len(self.train_data) / self.batch_size)
         decay_steps = int(num_batches_per_epoch * self.decay_step)
@@ -138,9 +136,10 @@ class Task1(object):
 
         """ Initialize the variables with default values"""
         init = tf.global_variables_initializer()
-        saver = tf.train.Saver()
+        #saver = tf.train.Saver(weights, max_to_keep=0)
 
         with tf.Session() as sess:
+            saver = tf.train.Saver()
 
             # Run the initializer
             sess.run(init)
@@ -188,27 +187,44 @@ class Task1(object):
                 train_data_shuffled = train_set_shuffled [:, 0:train_data.shape[1]]
                 train_hand_shuffled = train_set_shuffled [:, train_data.shape[1]:]
 
-                if epoch % self.saved_period == 0 and epoch != 0:
-                    model_path = self.model_dir + '/' + 'checkpoint_epoch_{}'.format(epoch)
-                    save_path = saver.save(sess, model_path)
+                if (epoch + 1) % self.saved_period == 0 and epoch != 0:
+                    model_path = self.model_dir + '/' + 'checkpoint_epoch_{}'.format(epoch) + '.ckpt'
+                    save_path = saver.save(sess, model_path, global_step=global_step)
                     print('Model saved in file: %s' % save_path)
 
             print ("Training finished!")
             stop_time = time.time()
             print ("Training time (s):", stop_time - start_time)
 
-            model_path = self.model_dir + '/' + 'checkpoint_final'
-            save_path = saver.save(sess, model_path)
-            print('Model saved in file: %s' % save_path)
+            #model_path = self.model_dir + '/' + 'checkpoint_final.cpkt'
+            #save_path = saver.save(sess, model_path)
+            #print('Model saved in file: %s' % save_path)
 
-    def test(self):
+    def test_nn(self):
+        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
+        init = tf.global_variables_initializer()
+
+        """
         if self.model_name == None:
             print('Model does not exist')
             sys.exit(-1)
+        """
 
+        #print('test data shape: {}'.format(self.test_data.shape))
+
+        meta_graph_file = './checkpoint/checkpoint_epoch_4.ckpt-2475.meta'
+        model_file = './checkpoint/checkpoint_epoch_4.ckpt-2475'
+
+        #saver = tf.train.import_meta_graph(meta_graph_file)
         ckpt_path = self.model_dir + '/' + self.model_name
+
+        print(ckpt_path)
+
         with tf.Session() as sess:
-            saver.restore(sess, ckpt_path)
+            saver = tf.train.Saver()
+            saver.restore(sess, model_file)
+            #test_output = sess.run(tf.argmax(logits, 1), feed_dict={X: self.test_data})
+
 
             #TODO: create batch from test data
             #test_data -> all_possible_case
@@ -216,6 +232,8 @@ class Task1(object):
             #TODO: feed test data
 
             #test_output = sess.run([logits], feed_dict={X: BATCH_TEST_DATA})
+
+            #TODO: find result
 
     def test_encode (self):
 
@@ -256,12 +274,11 @@ if __name__ == '__main__':
 
     task1 = Task1 (train_file, test_data_file, test_label_file, args)
 
-    if args.test:
-        print('test')
+    if not args.test:
+        #task1.test()
+        task1.train_nn()
     else:
-        task1.train()
-
-
+        task1.test_nn()
 """
             test_hand_encode = self.enc.transform (self.test_hand).toarray() #self.test_hand#
             print('accuracy:', sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode, dropout:self.DROP_OUT}))
@@ -271,4 +288,12 @@ if __name__ == '__main__':
             np.savetxt ("output_task1.txt", sess.run (tf.argmax(prediction, 1), feed_dict={X: self.test_data, dropout:self.DROP_OUT}), fmt = "%d")
             """
 
+"""
+            test_hand_encode = self.enc.transform (self.test_hand).toarray() #self.test_hand#
+            print('accuracy:', sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode, dropout:self.DROP_OUT}))
+
+            print ("test predicted hand:", sess.run (tf.argmax(prediction, 1)[0:10], feed_dict={X: self.test_data, dropout:self.DROP_OUT}))
+            print ("test ground truth hand:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: test_hand_encode}))
+            np.savetxt ("output_task1.txt", sess.run (tf.argmax(prediction, 1), feed_dict={X: self.test_data, dropout:self.DROP_OUT}), fmt = "%d")
+"""
 
