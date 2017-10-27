@@ -257,7 +257,8 @@ class Task1(object):
                 batch_x = test_data_shuffled [start_index : end_index]
                 batch_y = test_hand_shuffled [start_index : end_index]
                 if batch_y.shape[0] == 0:
-                    print "Buzzz!"
+                    print ("Buzzz!")
+                    print (start_index, end_index)
                     break
                 batch_y_encode = self.enc.transform (batch_y).toarray() #batch_y#
                 index_counter = index_counter + 1
@@ -271,18 +272,16 @@ class Task1(object):
                 logits_batch = sess.run(logits, feed_dict={X: batch_x})
 
                 preds = tf.nn.softmax(logits_batch)
-                #print ("Ground truth hand batch:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: batch_y_encode}))
-                #print ("Predicted hand batch:", sess.run (tf.argmax(preds, 1)[0:10], feed_dict={X: self.test_data}))
-                #sys.exit (-1)
-                accuracy_batch = sess.run (accuracy, feed_dict={X: batch_x, Y: batch_y_encode}) 
-                print (i, accuracy)
-                total_correct_preds += accuracy_batch
+                correct_preds = tf.equal(tf.argmax(preds, 1), tf.argmax(batch_y_encode, 1))
+                accuracy_float = tf.reduce_sum(tf.cast(correct_preds, tf.float32))
+                total_correct_preds += sess.run(accuracy_float)  
 
 
             #TODO: find result
-            accuracy = total_correct_preds / total_batch 
-            print ("Acuracy: ", accuracy)            
+            accuracy_float = total_correct_preds / len (test_data)
+            print ("Acuracy: ", accuracy_float)            
             
+            #print('--- Accuracy:', sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode}))
             print ("test predicted hand:", sess.run (tf.argmax(tf.nn.softmax(logits), 1)[0:10], feed_dict={X: self.test_data}))
             print ("test ground truth hand:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: test_hand_encode}))
             np.savetxt ("output_task1.txt", sess.run (tf.argmax(tf.nn.softmax(logits), 1), feed_dict={X: self.test_data}), fmt = "%d")
