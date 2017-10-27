@@ -201,7 +201,7 @@ class Task1(object):
                 train_hand_shuffled = train_set_shuffled [:, train_data.shape[1]:]
 
                 if (epoch + 1) % self.saved_period == 0 and epoch != 0:
-                    model_path = self.model_dir + '/' + self.model_name + '_' + str(epoch) + '.ckpt'
+                    model_path = self.model_dir + '/' + self.model_name + '_' + str(epoch + 1) + '.ckpt'
                     save_path = saver.save(sess, model_path, global_step=global_step)
                     print('Model saved in file: %s' % save_path)
 
@@ -343,11 +343,11 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, default = './output')
 
     #hyper parameter
-    parser.add_argument('--epoch', type=int, default = 1000)
+    parser.add_argument('--epoch', type=int, default = 2000)
     parser.add_argument('--batch_size', type=int, default = 128)
     parser.add_argument('--learning_rate', type=float, default=0.00125)
-    parser.add_argument('--decay_rate', type=float, default=0.1)
-    parser.add_argument('--decay_step', type=int, default=500)
+    parser.add_argument('--decay_rate', type=float, default=0.5)
+    parser.add_argument('--decay_step', type=int, default=2000) #if decay_step > epoch, no exponential decay
 
     #network parameter
     parser.add_argument('--dim_hand', type=int, default=10)
