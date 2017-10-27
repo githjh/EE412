@@ -33,14 +33,13 @@ class Task1(object):
         self.gpu_idx = args.gpu_idx
         self.epoch = args.epoch
         self.batch_size = args.batch_size
-        self.hidden_layer_num = args.hidden_layer_num
         self.neuron_num = args.neuron_num
 
         self.learning_rate = args.learning_rate
         self.decay_step = args.decay_step
         self.decay_rate = args.decay_rate
         self.saved_period = args.saved_period
-        self.test = args.test
+        self.output_dir = args.output_dir
 
         self.model_dir = args.model_dir
         self.model_name = args.model_name
@@ -87,7 +86,7 @@ class Task1(object):
         return Z
 
         #create model
-    def build_model (self, dim_hand, no_unit_in_a_hidden_layer, layer_num, no_epoch, batch_size):
+    def build_model (self, dim_hand, no_unit_in_a_hidden_layer, no_epoch, batch_size):
         weights = []
 
         X = tf.placeholder(tf.float32, [None, dim_hand])
@@ -119,13 +118,20 @@ class Task1(object):
 
     def train_nn(self):
 
-        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
+        #building model
+        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.epoch, self.batch_size)
+
+        #evaluate model on training process
+        is_correct = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(Y, 1))
+        accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+        test_hand_encode = self.enc.transform(self.test_hand).toarray()
 
         num_batches_per_epoch = int(len(self.train_data) / self.batch_size)
         decay_steps = int(num_batches_per_epoch * self.decay_step)
         #decay_steps = num_batches_per_epoch
         global_step = tf.Variable(0, trainable = False)
-        learning_rate = 0.001#tf.train.exponential_decay(self.learning_rate, global_step, decay_steps, self.decay_rate, staircase = True)
+        #learning_rate = self.learning_rate
+        learning_rate = tf.train.exponential_decay(self.learning_rate, global_step, decay_steps, self.decay_rate, staircase = True)
 
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y))
         optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=global_step)
@@ -151,34 +157,43 @@ class Task1(object):
             train_data_shuffled = train_set_shuffled [:, 0:train_data.shape[1]]
             train_hand_shuffled = train_set_shuffled [:, train_data.shape[1]:]
 
-            total_batch = int(len(self.train_data)/self.batch_size)
+            total_batch = round((len(self.train_data)/self.batch_size) + 0.5)
 
             for epoch in range (self.epoch):
 
                 total_cost = 0
                 dropoutotal_cost = 0
                 index_counter = 0
-
+                left_num = len(self.train_data)
                 for i in range (total_batch):
                     start_index = index_counter * self.batch_size
-                    end_index = (index_counter + 1) * self.batch_size
+                    end_idex = 0
+                    if(left_num < self.batch_size):
+                        end_index = index_counter * self.batch_size + left_num
+                    else:
+                        end_index = (index_counter + 1) * self.batch_size
+
                     batch_x = train_data_shuffled [start_index : end_index]
                     batch_y = train_hand_shuffled [start_index : end_index]
                     batch_y_encode = self.enc.transform (batch_y).toarray() #batch_y#
                     #print ("batch_x", batch_x)
                     #print ("batch_y", batch_y)
                     index_counter = index_counter + 1
+                    left_num = left_num - self.batch_size
 
-                    if (index_counter >= total_batch):
+                    if (left_num <= 0):
                         index_counter = 0
 
                     #_, cost_val, lr = sess.run([optimizer, cost, learning_rate], feed_dict={X: batch_x, Y: batch_y_encode})
-                    _, cost_val = sess.run([optimizer, cost], feed_dict={X: batch_x, Y: batch_y_encode})
+                    _, cost_val, lr = sess.run([optimizer, cost, learning_rate], feed_dict={X: batch_x, Y: batch_y_encode})
                     total_cost += cost_val
                     #print ("cost_val:", cost_val)
 
                 #print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch), 'learning_rate = {:.5f}'.format(lr))
-                print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch))#, 'learning_rate = {:.5f}'.format(lr))
+                accuracy_ = sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode})
+                print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch), 'accuracy:{:.3f}'.format(accuracy_), 'lr: {}'.format(lr))
+                #, 'learning_rate = {:.5f}'.format(lr))
+                print
 
                 #TODO: training data permutation
                 train_set_shuffled = np.random.permutation(train_set)
@@ -186,7 +201,7 @@ class Task1(object):
                 train_hand_shuffled = train_set_shuffled [:, train_data.shape[1]:]
 
                 if (epoch + 1) % self.saved_period == 0 and epoch != 0:
-                    model_path = self.model_dir + '/' + 'checkpoint_epoch'#_{}'.format(epoch) + '.ckpt'
+                    model_path = self.model_dir + '/' + self.model_name + '_' + str(epoch) + '.ckpt'
                     save_path = saver.save(sess, model_path, global_step=global_step)
                     print('Model saved in file: %s' % save_path)
 
@@ -198,11 +213,34 @@ class Task1(object):
             #save_path = saver.save(sess, model_path)
             #print('Model saved in file: %s' % save_path)
 
+    def test_task1(self):
+        start_time = time.time()
+
+        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.epoch, self.batch_size)
+
+        is_correct = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(Y, 1))
+        accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+
+        test_hand_encode = self.enc.transform(self.test_hand).toarray()
+
+        init = tf.global_variables_initializer()
+
+        model_file_path = self.model_dir + '/' + self.model_name
+
+        with tf.Session() as sess:
+            saver = tf.train.Saver()
+            saver.restore(sess, model_file_path)
+
+            #print task1 test output result
+            task1_output = sess.run(tf.argmax(logits, 1), feed_dict={X: self.test_data})
+            np.savetxt('./{}/output_task1.txt'.format(self.output_dir), task1_output, fmt = '%d')
+
+            task1_accuracy = sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode})
+            print('task1 test accuracy: {:.2f}'.format(task1_accuracy))
+
     def test_nn(self):
-        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
-        
-        global_step = tf.Variable(0, trainable = False)
-        
+        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.epoch, self.batch_size)
+
         """ Evaluate model """
         is_correct = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(Y, 1))
         accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
@@ -257,7 +295,7 @@ class Task1(object):
                 batch_x = test_data_shuffled [start_index : end_index]
                 batch_y = test_hand_shuffled [start_index : end_index]
                 if batch_y.shape[0] == 0:
-                    print "Buzzz!"
+                    print ("Buzzz!")
                     break
                 batch_y_encode = self.enc.transform (batch_y).toarray() #batch_y#
                 index_counter = index_counter + 1
@@ -267,22 +305,22 @@ class Task1(object):
 
                 #TODO: feed test data
                 #TODO: use optimizer, cost???
-                #_, cost_val, logits_batch = sess.run([optimizer, cost, logits], feed_dict={X: batch_x, Y: batch_y_encode})          
+                #_, cost_val, logits_batch = sess.run([optimizer, cost, logits], feed_dict={X: batch_x, Y: batch_y_encode})
                 logits_batch = sess.run(logits, feed_dict={X: batch_x})
 
                 preds = tf.nn.softmax(logits_batch)
                 #print ("Ground truth hand batch:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: batch_y_encode}))
                 #print ("Predicted hand batch:", sess.run (tf.argmax(preds, 1)[0:10], feed_dict={X: self.test_data}))
                 #sys.exit (-1)
-                accuracy_batch = sess.run (accuracy, feed_dict={X: batch_x, Y: batch_y_encode}) 
+                accuracy_batch = sess.run (accuracy, feed_dict={X: batch_x, Y: batch_y_encode})
                 print (i, accuracy)
                 total_correct_preds += accuracy_batch
 
 
             #TODO: find result
-            accuracy = total_correct_preds / total_batch 
-            print ("Acuracy: ", accuracy)            
-            
+            accuracy = total_correct_preds / total_batch
+            print ("Acuracy: ", accuracy)
+
             print ("test predicted hand:", sess.run (tf.argmax(tf.nn.softmax(logits), 1)[0:10], feed_dict={X: self.test_data}))
             print ("test ground truth hand:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: test_hand_encode}))
             np.savetxt ("output_task1.txt", sess.run (tf.argmax(tf.nn.softmax(logits), 1), feed_dict={X: self.test_data}), fmt = "%d")
@@ -301,20 +339,21 @@ if __name__ == '__main__':
     #configuration
     parser.add_argument('--gpu_idx', type=str, default = '0')
     parser.add_argument('--model_dir', type=str, default = './checkpoint')
-    parser.add_argument('--model_name', type=str)
-    parser.add_argument('--test', type=bool, default=False)
-    parser.add_argument('--saved_period', type=int, default=50, help='save checkpoint per X epoch')
+    parser.add_argument('--model_name', type=str, default = 'task1')
+    parser.add_argument('--task', type=str, default='train')
+    parser.add_argument('--saved_period', type=int, default=200, help='save checkpoint per X epoch')
+    parser.add_argument('--output_dir', type=str, default = './output')
 
     #hyper parameter
-    parser.add_argument('--epoch', type=int, default = 100)
-    parser.add_argument('--batch_size', type=int, default = 100)
-    parser.add_argument('--learning_rate', type=float, default=0.01)
-    parser.add_argument('--decay_rate', type=float, default=0.5)
-    parser.add_argument('--decay_step', type=int, default=20)
+    parser.add_argument('--epoch', type=int, default = 1000)
+    parser.add_argument('--batch_size', type=int, default = 128)
+    parser.add_argument('--learning_rate', type=float, default=0.00125)
+    parser.add_argument('--decay_rate', type=float, default=0.1)
+    parser.add_argument('--decay_step', type=int, default=500)
 
     #network parameter
     parser.add_argument('--dim_hand', type=int, default=10)
-    parser.add_argument('--hidden_layer_num', type=int, default = 2)
+    #parser.add_argument('--hidden_layer_num', type=int, default = 2) #not implement variabel network layer
     parser.add_argument('--neuron_num', type=int, default = 1000)
 
     args = parser.parse_args()
@@ -322,15 +361,23 @@ if __name__ == '__main__':
     if not os.path.exists(args.model_dir):
         os.makedirs(args.model_dir)
 
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_idx
 
     task1 = Task1 (train_file, test_data_file, test_label_file, args)
 
-    if not args.test:
-        #task1.test()
+    if args.task ==  'train':
         task1.train_nn()
+    elif args.task == 'task1':
+        task1.test_task1()
+    elif args.task == 'task2':
+        task1.test_task2()
     else:
-        task1.test_nn()
+        print('task is wrong')
+        sys.exit(-1)
+
 """
             test_hand_encode = self.enc.transform (self.test_hand).toarray() #self.test_hand#
             print('accuracy:', sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode, dropout:self.DROP_OUT}))
