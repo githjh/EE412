@@ -8,19 +8,19 @@ b. TODO
 
 2. train
 
-python Task1.py
+python task.py
 
 * pre-trained model location: ./checkpoint 
 
 3. test
 
 - task 1
-python Task1.py --task task1 -model_name [model_name]
-ex) python Task1.py --task task1 -model_name dstep_250_drate_0.5_1999.ckpt-776000
+python task.py --mode 1 -model_name [model_name]
+ex) python task.py --mode 1 --model_name dstep_250_drate_0.5_1999.ckpt-776000
 
 - task2
-python Task2.py --task tas2 --model_name [model_name]
-ex) python Task1.py --task task1 -model_name dstep_250_drate_0.5_1999.ckpt-776000
+python task.py --mode 2 --model_name [model_name]
+ex) python task.py --mode 2 --model_name dstep_250_drate_0.5_1999.ckpt-776000
 
 All output files are saved to ./output directory.
 
