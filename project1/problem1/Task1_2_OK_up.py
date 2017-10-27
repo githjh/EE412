@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import time
 import argparse
 import os, sys
+import copy
 
 # Read training data from csv train file
 train_headers = ["suit1","rank1","suit2","rank2","suit3","rank3","suit4","rank4","suit5","rank5","hand"]
@@ -26,7 +27,77 @@ train_file = "./train_data.csv"
 test_data_file = "./test_data.csv"
 test_label_file = "./test_hand.csv"
 
-class Task1(object):
+class Card (object):
+    def __init__ (self, suit, rank):
+        self.suit = suit
+        self.rank = rank
+        
+    def modify_card (self, suit2, rank2):
+        self.suit = suit2
+        self.rank = rank2
+    
+    #@multimethod(int,int)
+    """def is_same_card (self, suit2, rank2):
+        return self.suit == suit2 and self.rank1 == rank2"""
+    
+    #@multimethod(object)
+    def is_same_card (self, card2):
+        return self.suit == card2.suit and self.rank == card2.rank
+    
+    def get_card (self):
+        list_suit_rank = [self.suit, self.rank]
+        return list_suit_rank
+
+    def __str__ (self, pre_str = "") :
+        return pre_str + str (self.get_card())
+    
+    
+class GroupCard (Card):
+    
+    def __init__ (self, list_cards, hand=-1): 
+        """
+            - Args:
+                + list_cards: [card1, card2, .., card5]
+                 with cardi = [cardi.suit, cardi.rank]
+        """
+        self.size_group = 5
+        self.list_cards = list_cards
+        self.hand = hand
+    
+    def copy (self):
+        return GroupCard (copy.copy (self.list_cards), copy.copy (self.hand))
+    
+    def modify_a_card (self, new_card, index):
+        self.list_cards[index] = new_card
+    
+    def change_hand (self, hand):
+        self.hand = hand
+        
+    def get_group_card (self):
+        list_suit_rank = []
+        for i in range (self.size_group):
+            list_suit_rank += self.list_cards[i].get_card()
+        return list_suit_rank
+    
+    def zeros (self):
+        card1 = Card (0, 0)   
+        card2 = Card (0, 0)
+        card3 = Card (0, 0)
+        card4 = Card (0, 0)
+        card5 = Card (0, 0)
+        
+        list_card = [card1, card2, card3, card4, card5]
+        
+        groupCard = GroupCard (list_card)
+        return groupCard
+
+    def get_group_card_arr (self):
+        return np.array (self.get_group_card()).reshape (1, 2 * self.size_group)
+    
+    def __str__ (self, pre_str = "") :
+        return pre_str + str (self.get_group_card_arr()) + "," + str (self.hand)
+
+class Task1(GroupCard):
 
     def __init__(self, train_file, test_data_file, test_label_file, args):
         #from args
@@ -40,7 +111,7 @@ class Task1(object):
         self.decay_step = args.decay_step
         self.decay_rate = args.decay_rate
         self.saved_period = args.saved_period
-        self.test = args.test
+        self.mode = args.mode
 
         self.model_dir = args.model_dir
         self.model_name = args.model_name
@@ -57,7 +128,8 @@ class Task1(object):
         self.enc.fit(np.array ([[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]]))
 
         self.args = args
-        self.dim_hand = self.train_data.shape[1]
+        self.dim_hand = args.dim_hand#self.train_hand.shape[1]
+        self.dim_data = args.dim_data#self.train_data.shape[1]
 
         self.DROP_OUT = 1#0.75
 
@@ -87,15 +159,15 @@ class Task1(object):
         return Z
 
         #create model
-    def build_model (self, dim_hand, no_unit_in_a_hidden_layer, layer_num, no_epoch, batch_size):
+    def build_model (self,dim_data, dim_hand, no_unit_in_a_hidden_layer, layer_num, no_epoch, batch_size):
         weights = []
 
-        X = tf.placeholder(tf.float32, [None, dim_hand])
+        X = tf.placeholder(tf.float32, [None, dim_data])
         Y = tf.placeholder(tf.float32, [None, dim_hand])
 
         #dropout = tf.placeholder(tf.float32, name='dropout')
 
-        W1 = tf.Variable(tf.random_normal([dim_hand, no_unit_in_a_hidden_layer], stddev=0.01))
+        W1 = tf.Variable(tf.random_normal([dim_data, no_unit_in_a_hidden_layer], stddev=0.01))
         B1 = tf.Variable(tf.random_normal([no_unit_in_a_hidden_layer], stddev=0.01))
         L1 = tf.nn.relu(tf.nn.bias_add(tf.matmul(X, W1), B1))
 
@@ -119,7 +191,7 @@ class Task1(object):
 
     def train_nn(self):
 
-        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
+        X, Y, logits, weights = self.build_model(self.dim_data, self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
 
         num_batches_per_epoch = int(len(self.train_data) / self.batch_size)
         decay_steps = int(num_batches_per_epoch * self.decay_step)
@@ -199,7 +271,7 @@ class Task1(object):
             #print('Model saved in file: %s' % save_path)
 
     def test_nn(self):
-        X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
+        X, Y, logits, weights = self.build_model(self.dim_data, self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
         
         global_step = tf.Variable(0, trainable = False)
         
@@ -285,7 +357,97 @@ class Task1(object):
             print ("test predicted hand:", sess.run (tf.argmax(tf.nn.softmax(logits), 1)[0:10], feed_dict={X: self.test_data}))
             print ("test ground truth hand:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: test_hand_encode}))
             np.savetxt ("output_task1.txt", sess.run (tf.argmax(tf.nn.softmax(logits), 1), feed_dict={X: self.test_data}), fmt = "%d")
+            
+            stop_time = time.time()
+            print ("Testing time (s):", stop_time - start_time)
 
+    def modify_hand(self):
+        X, Y, logits, weights = self.build_model(self.dim_data, self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
+        
+        global_step = tf.Variable(0, trainable = False)
+        
+        """ Evaluate model """
+        is_correct = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(Y, 1))
+        accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+
+        init = tf.global_variables_initializer()
+
+        meta_graph_file = './checkpoint/checkpoint_epoch_4.ckpt-2475.meta'
+        model_file = './checkpoint/checkpoint_epoch-49500'
+
+        with tf.Session() as sess:
+            saver = tf.train.Saver()
+            saver.restore(sess, model_file)
+
+            # record the time when testing starts
+            start_time = time.time()
+
+            test_data = self.test_data[:10]
+            test_hand = self.test_hand[:10]
+            test_hand_encode = self.enc.transform (test_hand).toarray()
+            test_set = np.concatenate ((test_data, test_hand), axis = 1)
+            test_set_shuffled = np.random.permutation(test_set)
+            test_data_shuffled = test_set_shuffled [:, 0:test_data.shape[1]]
+            test_hand_shuffled = test_set_shuffled [:, test_data.shape[1]:]
+            modified_data = np.zeros ((0, 10))
+
+            for i in range (len (test_data)):
+                 
+                matrix = np.zeros ((0, 10))
+                print ("Group card ", i)
+                card1 = Card (test_data[i][0], test_data[i][1])   
+                card2 = Card (test_data[i][2], test_data[i][3])   
+                card3 = Card (test_data[i][4], test_data[i][5])   
+                card4 = Card (test_data[i][6], test_data[i][7])   
+                card5 = Card (test_data[i][8], test_data[i][9])   
+                    
+                list_card = [card1, card2, card3, card4, card5]
+
+                a_group_card = GroupCard (list_card)
+                predicted_hand = sess.run (tf.argmax(logits, 1), feed_dict={X: a_group_card.get_group_card_arr()})
+                a_group_card.change_hand (predicted_hand)
+                print (a_group_card)
+                copy_group_card = a_group_card.copy ()
+                if predicted_hand == 9:
+                    print ("No change")
+                    modified_data = np.concatenate ((modified_data, a_group_card.get_group_card_arr()))
+                    continue
+                mem_list = []
+                mem_lib = {}
+                count = 0
+                for j in range (5):
+                    for suit in range (1, 5):
+                        for rank in range (1, 14):
+                            count += 1
+                            mem_lib[count] = (j, suit, rank)
+                            new_card = Card (suit, rank)
+                            if new_card.is_same_card (card1) or new_card.is_same_card (card2) or new_card.is_same_card (card3) or new_card.is_same_card (card4) or new_card.is_same_card (card5):
+                                mem_list.append (count)
+                            copy_group_card.modify_a_card (new_card, j)
+                            matrix = np.concatenate ((matrix, copy_group_card.get_group_card_arr()))
+                            copy_group_card = a_group_card.copy ()
+
+                preds = sess.run (tf.argmax(tf.nn.softmax(logits), 1), feed_dict={X: matrix})
+                max_hand = predicted_hand[0]
+                selected_index = -1
+                for j in range (len (preds)):
+                    if (preds[j] > max_hand) and (j not in mem_list):
+                        selected_index = j
+                        max_hand = preds[j]
+                print (selected_index, max_hand)
+                if selected_index > -1:
+                    position = mem_lib[selected_index][0]
+                    chosen_card = Card (mem_lib[selected_index][1], mem_lib[selected_index][2])
+                    copy_group_card.modify_a_card (chosen_card, position)
+                    modified_data = np.concatenate ((modified_data, copy_group_card.get_group_card_arr()))
+                else:
+                    modified_data = np.concatenate ((modified_data, a_group_card.get_group_card_arr()))
+
+            #TODO: save new group cards into this file
+            np.savetxt ("output_task2.txt", modified_data, fmt = "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d")
+            
+            stop_time = time.time()
+            print ("Changing hand time (s):", stop_time - start_time)
     def test_encode (self):
 
         batch_y =self.train_hand [0 : 2]
@@ -301,7 +463,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu_idx', type=str, default = '0')
     parser.add_argument('--model_dir', type=str, default = './checkpoint')
     parser.add_argument('--model_name', type=str)
-    parser.add_argument('--test', type=bool, default=False)
+    parser.add_argument('--mode', type=int, default=0)
     parser.add_argument('--saved_period', type=int, default=50, help='save checkpoint per X epoch')
 
     #hyper parameter
@@ -312,6 +474,7 @@ if __name__ == '__main__':
     parser.add_argument('--decay_step', type=int, default=20)
 
     #network parameter
+    parser.add_argument('--dim_data', type=int, default=10)
     parser.add_argument('--dim_hand', type=int, default=10)
     parser.add_argument('--hidden_layer_num', type=int, default = 2)
     parser.add_argument('--neuron_num', type=int, default = 1000)
@@ -325,11 +488,13 @@ if __name__ == '__main__':
 
     task1 = Task1 (train_file, test_data_file, test_label_file, args)
 
-    if not args.test:
+    if args.mode == 0:
         #task1.test()
         task1.train_nn()
-    else:
+    elif args.mode == 1:
         task1.test_nn()
+    elif args.mode == 2:
+        task1.modify_hand()
 """
             test_hand_encode = self.enc.transform (self.test_hand).toarray() #self.test_hand#
             print('accuracy:', sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode, dropout:self.DROP_OUT}))
