@@ -236,7 +236,7 @@ class Task1(object):
             np.savetxt('./{}/output_task1.txt'.format(self.output_dir), task1_output, fmt = '%d')
 
             task1_accuracy = sess.run(accuracy, feed_dict={X: self.test_data, Y: test_hand_encode})
-            print('task1 test accuracy: {:.2f}'.format(task1_accuracy))
+            print('task1 test accuracy: {:.3f}'.format(task1_accuracy))
 
     def test_nn(self):
         X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.epoch, self.batch_size)
