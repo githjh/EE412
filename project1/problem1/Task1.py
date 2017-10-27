@@ -125,14 +125,10 @@ class Task1(object):
         decay_steps = int(num_batches_per_epoch * self.decay_step)
         #decay_steps = num_batches_per_epoch
         global_step = tf.Variable(0, trainable = False)
-        learning_rate = tf.train.exponential_decay(self.learning_rate, global_step, decay_steps, self.decay_rate, staircase = True)
+        learning_rate = 0.001#tf.train.exponential_decay(self.learning_rate, global_step, decay_steps, self.decay_rate, staircase = True)
 
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=Y))
         optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=global_step)
-
-        """ Evaluate model """
-        is_correct = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(Y, 1))
-        accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
 
         """ Initialize the variables with default values"""
         init = tf.global_variables_initializer()
@@ -176,11 +172,13 @@ class Task1(object):
                     if (index_counter >= total_batch):
                         index_counter = 0
 
-                    _, cost_val, lr = sess.run([optimizer, cost, learning_rate], feed_dict={X: batch_x, Y: batch_y_encode})
+                    #_, cost_val, lr = sess.run([optimizer, cost, learning_rate], feed_dict={X: batch_x, Y: batch_y_encode})
+                    _, cost_val = sess.run([optimizer, cost], feed_dict={X: batch_x, Y: batch_y_encode})
                     total_cost += cost_val
                     #print ("cost_val:", cost_val)
 
-                print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch), 'learning_rate = {:.5f}'.format(lr))
+                #print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch), 'learning_rate = {:.5f}'.format(lr))
+                print('Epoch: %04d' % (epoch + 1), 'Avg. cost = {:.3f}'.format(total_cost / total_batch))#, 'learning_rate = {:.5f}'.format(lr))
 
                 #TODO: training data permutation
                 train_set_shuffled = np.random.permutation(train_set)
@@ -188,7 +186,7 @@ class Task1(object):
                 train_hand_shuffled = train_set_shuffled [:, train_data.shape[1]:]
 
                 if (epoch + 1) % self.saved_period == 0 and epoch != 0:
-                    model_path = self.model_dir + '/' + 'checkpoint_epoch_{}'.format(epoch) + '.ckpt'
+                    model_path = self.model_dir + '/' + 'checkpoint_epoch'#_{}'.format(epoch) + '.ckpt'
                     save_path = saver.save(sess, model_path, global_step=global_step)
                     print('Model saved in file: %s' % save_path)
 
@@ -202,6 +200,13 @@ class Task1(object):
 
     def test_nn(self):
         X, Y, logits, weights = self.build_model(self.dim_hand, self.neuron_num, self.hidden_layer_num, self.epoch, self.batch_size)
+        
+        global_step = tf.Variable(0, trainable = False)
+        
+        """ Evaluate model """
+        is_correct = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(Y, 1))
+        accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+
         init = tf.global_variables_initializer()
 
         """
@@ -213,27 +218,74 @@ class Task1(object):
         #print('test data shape: {}'.format(self.test_data.shape))
 
         meta_graph_file = './checkpoint/checkpoint_epoch_4.ckpt-2475.meta'
-        model_file = './checkpoint/checkpoint_epoch_4.ckpt-2475'
+        model_file = './checkpoint/checkpoint_epoch-49500'
 
         #saver = tf.train.import_meta_graph(meta_graph_file)
-        ckpt_path = self.model_dir + '/' + self.model_name
+        #ckpt_path = self.model_dir + '/' + self.model_name
 
-        print(ckpt_path)
+        #print(ckpt_path)
 
         with tf.Session() as sess:
             saver = tf.train.Saver()
             saver.restore(sess, model_file)
             #test_output = sess.run(tf.argmax(logits, 1), feed_dict={X: self.test_data})
-
+            #print (test_output)
+            #sys.exit (-1)
 
             #TODO: create batch from test data
             #test_data -> all_possible_case
 
-            #TODO: feed test data
+            # record the time when testing starts
+            start_time = time.time()
 
-            #test_output = sess.run([logits], feed_dict={X: BATCH_TEST_DATA})
+            test_data = self.test_data
+            test_hand = self.test_hand
+            test_hand_encode = self.enc.transform (test_hand).toarray()
+            test_set = np.concatenate ((test_data, test_hand), axis = 1)
+            test_set_shuffled = np.random.permutation(test_set)
+            test_data_shuffled = test_set_shuffled [:, 0:test_data.shape[1]]
+            test_hand_shuffled = test_set_shuffled [:, test_data.shape[1]:]
+
+            total_batch = int(len(self.train_data)/self.batch_size)
+
+            total_correct_preds = 0
+            index_counter = 0
+
+            for i in range (total_batch):
+                start_index = index_counter * self.batch_size
+                end_index = (index_counter + 1) * self.batch_size
+                batch_x = test_data_shuffled [start_index : end_index]
+                batch_y = test_hand_shuffled [start_index : end_index]
+                if batch_y.shape[0] == 0:
+                    print "Buzzz!"
+                    break
+                batch_y_encode = self.enc.transform (batch_y).toarray() #batch_y#
+                index_counter = index_counter + 1
+
+                if (index_counter >= total_batch):
+                    index_counter = 0
+
+                #TODO: feed test data
+                #TODO: use optimizer, cost???
+                #_, cost_val, logits_batch = sess.run([optimizer, cost, logits], feed_dict={X: batch_x, Y: batch_y_encode})          
+                logits_batch = sess.run(logits, feed_dict={X: batch_x})
+
+                preds = tf.nn.softmax(logits_batch)
+                #print ("Ground truth hand batch:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: batch_y_encode}))
+                #print ("Predicted hand batch:", sess.run (tf.argmax(preds, 1)[0:10], feed_dict={X: self.test_data}))
+                #sys.exit (-1)
+                accuracy_batch = sess.run (accuracy, feed_dict={X: batch_x, Y: batch_y_encode}) 
+                print (i, accuracy)
+                total_correct_preds += accuracy_batch
+
 
             #TODO: find result
+            accuracy = total_correct_preds / total_batch 
+            print ("Acuracy: ", accuracy)            
+            
+            print ("test predicted hand:", sess.run (tf.argmax(tf.nn.softmax(logits), 1)[0:10], feed_dict={X: self.test_data}))
+            print ("test ground truth hand:", sess.run (tf.argmax(Y, 1)[0:10], feed_dict={Y: test_hand_encode}))
+            np.savetxt ("output_task1.txt", sess.run (tf.argmax(tf.nn.softmax(logits), 1), feed_dict={X: self.test_data}), fmt = "%d")
 
     def test_encode (self):
 
@@ -251,7 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_dir', type=str, default = './checkpoint')
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--test', type=bool, default=False)
-    parser.add_argument('--saved_period', type=int, default=10, help='save checkpoint per X epoch')
+    parser.add_argument('--saved_period', type=int, default=50, help='save checkpoint per X epoch')
 
     #hyper parameter
     parser.add_argument('--epoch', type=int, default = 100)
