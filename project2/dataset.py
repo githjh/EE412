@@ -4,13 +4,19 @@ import numpy as np
 
 RATE_TRAIN = "ee412.train"
 
+TEST_DATA_SIZE = 10000
+
 def load_dataset(is_train=True):
-    #f = open(RATE_TRAIN, 'w')
+    
     with open(RATE_TRAIN) as f:
             data_read = csv.reader(f, delimiter="\t")
             data_list = list(data_read)
-            #data_list = [int(i) for i in data_read]
-            #print data_list
+	    data_len = len(data_list)
+	    train_data_end = data_len - TEST_DATA_SIZE
+	    if (is_train):
+		    data_list = data_list[:train_data_end]
+	    else:
+		    data_list = data_list[train_data_end:]
     #	print (data_list)
 
     data_features = np.array(data_list)[:,[0,1,3]]
@@ -20,13 +26,6 @@ def load_dataset(is_train=True):
 
     return data_features, data_labels
 
-#print(type(data_labels[0]))
-#assert data_features.shape[0] == data_labels.shape[0]
+#features, labels = load_dataset()
+#print (features.shape,labels.shape)
 
-"""
-dataset = tf.data.Dataset.from_tensor_slices((data_features, data_labels))
-batched_dataset = dataset.batch(4)
-iterator = batched_dataset.make_one_shot_iterator()
-next_example, next_label = iterator.get_next()
-print((next_example, next_label))
-"""
