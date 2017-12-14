@@ -14,9 +14,9 @@ def load_dataset(is_train=True):
     #	print (data_list)
 
     data_features = np.array(data_list)[:,[0,1,3]]
-    data_features = data_features.astype(np.int32)
+    data_features = data_features.astype(np.float32)
     data_labels = np.array(data_list)[:,[2]]
-    data_labels = data_labels.astype(np.int32)
+    data_labels = data_labels.astype(np.float32)
 
     return data_features, data_labels
 
