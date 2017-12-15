@@ -15,15 +15,15 @@ DATA_FEATURE_SIZE = USER_MAX + ITEM_MAX + 1
 def load_dataset(is_train=True):
     File_name = None
     if(is_train):
-	File_name = RATE_TRAIN
+        File_name = RATE_TRAIN
     else:
-	File_name = RATE_TEST
+        File_name = RATE_TEST
     with open(File_name) as f:
-    	if(is_train):
+        if(is_train):
             data_read = csv.reader(f, delimiter="\t")
-	else:
-	    data_read = csv.reader(f, delimiter=",")
-	data_list = list(data_read)
+        else:
+            data_read = csv.reader(f, delimiter=",")
+        data_list = list(data_read)
 	    #data_len = len(data_list)
 	    #train_data_end = data_len - TEST_DATA_SIZE
 	    #find_data = np.array(data_list)[:,[3]]
@@ -53,14 +53,15 @@ def load_dataset(is_train=True):
     data_features[np.arange(dataset_size), USER_MAX + ITEM_MAX] = time_data
     #np.set_printoptions(threshold=np.nan)
 
+    print ("test")
     if(is_train):
-    	data_labels = np.array(data_list)[:,[2]]
-	data_labels = data_labels.astype(np.float32)
+        data_labels = np.array(data_list)[:,[2]]
+        data_labels = data_labels.astype(np.float32)
     else:
-	data_labels = np.zeros((dataset_size,1))
+        data_labels = np.zeros((dataset_size,1))
 
     return data_features, data_labels
 
-#features, labels = load_dataset(False)
-#print (features.shape,labels.shape)
-
+features, labels = load_dataset(True)
+print (features.shape,labels.shape)
+print ("test")
