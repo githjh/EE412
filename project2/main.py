@@ -1,3 +1,4 @@
+import csv
 import argparse
 import tensorflow as tf
 import tensorlayer as tl
@@ -41,23 +42,26 @@ def train(features, labels, args):
 
         while True:
             try:
-                loss_, _ = sess.run([loss, opt])
+                loss_, _, output_, label_ = sess.run([loss, opt, network.outputs, label])
                 total_loss = total_loss + loss_
                 total_iter = total_iter + 1 # might be subtituded by global step
             except tf.errors.OutOfRangeError:
                 break
 
         print('Epoch: %d \t Average Train Error: %.4f' % (epoch, total_loss / total_iter))
+        print(output_)
+        print(label_)
 
     #Save Model
     tl.files.save_ckpt(sess, 'project2.ckpt', save_dir='checkpoint', var_list=tl.layers.get_variables_with_name('fully'))
 
+#TODO: quantize output value [-5, 5]
 def evaluate(features, args):
     #Load Model
     sess = tf.InteractiveSession()
 
     #Build input pipepline
-    dataset = tf.data.Dataset.from_tensor_slices((features))
+    dataset = tf.data.Dataset.from_tensor_slices(features)
     #dataset = dataset.shuffle(buffer_size=10000)
     batched_dataset = dataset.batch(args.batchNum)
     iterator = batched_dataset.make_one_shot_iterator()
@@ -66,21 +70,19 @@ def evaluate(features, args):
 
     #Build model and optimizer
     network = fully_connect_model(feature, args.layerNum, args.unitNum)
-    tl.files.load_ckpt(sess, args.modeName)
 
     initialize_global_variables(sess)
+    tl.files.load_ckpt(sess, args.modelName)
 
-    total_loss = 0; total_iter = 0;
     #Evaluate
     while True:
         try:
-            loss_, _ = sess.run([loss, opt, network.outputs])
-            total_loss = total_loss + loss_
-            total_iter = total_iter + 1 # might be subtituded by global step
+            feature_, output_ = sess.run([feature, network.outputs])
+            #print(feature_, output_)
         except tf.errors.OutOfRangeError:
             break
 
-    print('Average Test Error: %.4f' % (total_loss / total_iter))
+    #print('Average Test Error: %.4f' % (total_loss / total_iter))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -98,5 +100,6 @@ if __name__ == '__main__':
         print(features.shape, labels.shape)
         train(features, labels, args)
     else: #TODO: test evaluation stage
-        features = load_dataset(False)
+        features, _ = load_dataset(False)
+        #features = np.array([
         evaluate(features, args)

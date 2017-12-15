@@ -13,19 +13,18 @@ ITEM_MAX = 1682
 DATA_FEATURE_SIZE = USER_MAX + ITEM_MAX + 1
 
 def load_dataset(is_train=True):
-    
     with open(RATE_TRAIN) as f:
-            data_read = csv.reader(f, delimiter="\t")
-            data_list = list(data_read)
-	    data_len = len(data_list)
-	    train_data_end = data_len - TEST_DATA_SIZE
-	    #find_data = np.array(data_list)[:,[3]]
-	    #find_data = find_data.astype(np.float32)
-	    #print np.amax(find_data),np.amin(find_data)
-	    if (is_train):
-		    data_list = data_list[:train_data_end]
-	    else:
-		    data_list = data_list[train_data_end:]
+        data_read = csv.reader(f, delimiter="\t")
+        data_list = list(data_read)
+        data_len = len(data_list)
+        train_data_end = data_len - TEST_DATA_SIZE
+        #find_data = np.array(data_list)[:,[3]]
+        #find_data = find_data.astype(np.float32)
+        #print np.amax(find_data),np.amin(find_data)
+        if (is_train):
+                data_list = data_list[:train_data_end]
+        else:
+                data_list = data_list[train_data_end:]
     #	print (data_list)
 
     data_features_raw = np.array(data_list)[:,[0,1,3]]
@@ -47,6 +46,7 @@ def load_dataset(is_train=True):
     #print (data_features[0:2])
     data_labels = np.array(data_list)[:,[2]]
     data_labels = data_labels.astype(np.float32)
+    data_features = data_features.astype(np.float32)
 
     return data_features, data_labels
 
