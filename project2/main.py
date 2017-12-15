@@ -75,12 +75,18 @@ def evaluate(features, args):
     tl.files.load_ckpt(sess, args.modelName)
 
     #Evaluate
-    while True:
-        try:
-            feature_, output_ = sess.run([feature, network.outputs])
-            #print(feature_, output_)
-        except tf.errors.OutOfRangeError:
-            break
+    output_file_name = 'result.txt'
+    with open(output_file_name,'w') as fo:
+        data_writer = csv.writer(fo)
+        while True:
+            try:
+                feature_, output_ = sess.run([feature, network.outputs])
+                for i in range(feature_.shape[0]):
+                    user_id = np.argmax(feature_[i][0:USER_MAX]) +1
+                    item_id = np.argmax(feature_[i][USER_MAX:USER_MAX+ITEM_MAX]) +1
+                    data_writer.writerow([user_id,item_id,output_[i][0]])
+            except tf.errors.OutOfRangeError:
+                break
 
     #print('Average Test Error: %.4f' % (total_loss / total_iter))
 

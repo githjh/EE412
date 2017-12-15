@@ -51,6 +51,7 @@ def load_dataset(is_train=True):
     data_features[np.arange(dataset_size), user_data-1] = 1
     data_features[np.arange(dataset_size), item_data-1 + USER_MAX] = 1
     data_features[np.arange(dataset_size), USER_MAX + ITEM_MAX] = time_data
+    data_features = data_features.astype(np.float32)
     #np.set_printoptions(threshold=np.nan)
 
     if(is_train):
