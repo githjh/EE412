@@ -53,7 +53,6 @@ def load_dataset(is_train=True):
     data_features[np.arange(dataset_size), USER_MAX + ITEM_MAX] = time_data
     #np.set_printoptions(threshold=np.nan)
 
-    print ("test")
     if(is_train):
         data_labels = np.array(data_list)[:,[2]]
         data_labels = data_labels.astype(np.float32)
@@ -62,6 +61,5 @@ def load_dataset(is_train=True):
 
     return data_features, data_labels
 
-features, labels = load_dataset(True)
-print (features.shape,labels.shape)
-print ("test")
+#features, labels = load_dataset(False)
+#print (features.shape,labels.shape)
