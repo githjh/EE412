@@ -93,9 +93,10 @@ if __name__ == '__main__':
     parser.add_argument('--mode', default='train', choices=['train', 'test'])
 
     args = parser.parse_args()
-    if args.mode is 'train':
+    if args.mode == 'train':
         features, labels = load_dataset(True)
+        print(features.shape, labels.shape)
         train(features, labels, args)
     else: #TODO: test evaluation stage
         features = load_dataset(False)
-        evaluate(features, labels, args)
+        evaluate(features, args)
