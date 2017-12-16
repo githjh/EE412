@@ -1,9 +1,40 @@
 import csv
+import sys
 import argparse
 import tensorflow as tf
 import tensorlayer as tl
 from dataset import *
 from model import *
+from option import *
+
+
+def build_model(feature, args):
+    model = 'None'
+
+    if args.model == 'fully':
+        model = fully_connect_model(
+            feature, args.layerNum, args.unitNum, args.activator, args.initializer, args.model)
+
+    elif args.model == 'fully_BN':
+        if args.mode == 'train' or args.mode == 'retrain':
+            model = fully_connect_BN_model(
+                feature, args.layerNum, args.unitNum, args.activator, args.initializer, True, args.decay, args.model)
+        else:
+            model = fully_connect_BN_model(
+                feature, args.layerNum, args.unitNum, args.activator, args.initializer, False, args.decay, args.model)
+
+    elif args.model == 'fully_dropout':
+        if args.mode == 'train' or args.mode == 'retrain':
+            model = fully_connect_dropout_model(
+                feature, args.layerNum, args.unitNum, args.activator, args.initializer, args.keep, True, args.model)
+        else:
+            model = fully_connect_dropout_model(
+                feature, args.layerNum, args.unitNum, args.activator, args.initializer, 1, False, args.model)
+
+    assert model is not None
+
+    return model
+
 
 def build_optimizer(output, label, learningRate):
     diff = output - label
@@ -11,7 +42,8 @@ def build_optimizer(output, label, learningRate):
     loss = tf.reduce_mean(tf.square(output - label))
 
     train_vars = tl.layers.get_variables_with_name('fully', True, True)
-    opt = tf.train.AdamOptimizer(learningRate).minimize(loss, var_list=train_vars)
+    opt = tf.train.AdamOptimizer(learningRate).minimize(
+        loss, var_list=train_vars)
 
     return loss, opt
 
@@ -19,17 +51,18 @@ def build_optimizer(output, label, learningRate):
 def train(features, labels, args):
     sess = tf.InteractiveSession()
 
-    #Build input pipepline
+    # Build input pipepline
     dataset = tf.data.Dataset.from_tensor_slices((features, labels))
     dataset = dataset.shuffle(buffer_size=10000)
     dataset = dataset.batch(args.batchNum)
-    #datset = dataset.repeat(3)  # Repeat the input indefinitely.
+    # datset = dataset.repeat(3)  # Repeat the input indefinitely.
     iterator = dataset.make_initializable_iterator()
 
     feature, label = iterator.get_next()
 
-    #Build model and optimizer
-    network = fully_connect_model(feature, args.layerNum, args.unitNum)
+    # Build model and optimizer
+    #network = fully_connect_model(feature, args.layerNum, args.unitNum, args.activator, args.initializer)
+    network = build_model(feature, args)
     loss, opt = build_optimizer(network.outputs, label, args.learningRate)
 
     initialize_global_variables(sess)
@@ -47,7 +80,11 @@ def train(features, labels, args):
             sys.exit()
     """
 
-    #Train
+    #print(tl.layers.get_variables_with_name(args.model))
+    feed_dict = {}
+    feed_dict.update(network.all_drop)
+
+    # Train
     for epoch in range(args.epoch):
         total_loss = 0
         total_iter = 0
@@ -55,25 +92,27 @@ def train(features, labels, args):
 
         while True:
             try:
-                loss_, _, output_, label_ = sess.run([loss, opt, network.outputs, label])
+                loss_, _, output_, label_ = sess.run([loss, opt, network.outputs, label], feed_dict=feed_dict)
                 total_loss = total_loss + loss_
-                total_iter = total_iter + 1 # might be subtituded by global step
+                total_iter = total_iter + 1  # might be subtituded by global step
             except tf.errors.OutOfRangeError:
                 break
 
-        print('Epoch: %d \t Average Train Error: %.4f' % (epoch, total_loss / total_iter))
-        #print(output_)
-        #print(label_)
+        #TODO: tensorboard and evaluate validation error
+        print('Epoch: %d \t Average Train Error: %.4f' %
+              (epoch, total_loss / total_iter))
 
-    #Save Model
-    tl.files.save_ckpt(sess, '%s'%(args.modelName), save_dir='checkpoint', var_list=tl.layers.get_variables_with_name('fully'))
+    # Save Model
+    tl.files.save_ckpt(sess, '%s' % (args.modelName), save_dir='checkpoint', var_list=network.all_params)
 
-#TODO: quantize output value [-5, 5]
+# TODO: quantize output value [-5, 5]
+
+
 def evaluate(features, args):
-    #Load Model
+    # Load Model
     sess = tf.InteractiveSession()
 
-    #Build input pipepline
+    # Build input pipepline
     dataset = tf.data.Dataset.from_tensor_slices(features)
     #dataset = dataset.shuffle(buffer_size=10000)
     batched_dataset = dataset.batch(args.batchNum)
@@ -81,46 +120,34 @@ def evaluate(features, args):
 
     feature = iterator.get_next()
 
-    #Build model and optimizer
-    network = fully_connect_model(feature, args.layerNum, args.unitNum)
+    # Build model and optimizer
+    network = build_model(feature, args)
 
     initialize_global_variables(sess)
     tl.files.load_ckpt(sess, args.modelName, is_latest=False)
 
-    #Evaluate
+    # Evaluate
     output_file_name = 'result.txt'
-    with open(output_file_name,'w') as fo:
+    with open(output_file_name, 'w') as fo:
         data_writer = csv.writer(fo)
         while True:
             try:
                 feature_, output_ = sess.run([feature, network.outputs])
                 for i in range(feature_.shape[0]):
-                    user_id = np.argmax(feature_[i][0:USER_MAX]) +1
-                    item_id = np.argmax(feature_[i][USER_MAX:USER_MAX+ITEM_MAX]) +1
-                    data_writer.writerow([user_id,item_id,output_[i][0]])
+                    user_id = np.argmax(feature_[i][0:USER_MAX]) + 1
+                    item_id = np.argmax(
+                        feature_[i][USER_MAX:USER_MAX + ITEM_MAX]) + 1
+                    data_writer.writerow([user_id, item_id, output_[i][0]])
             except tf.errors.OutOfRangeError:
                 break
 
     #print('Average Test Error: %.4f' % (total_loss / total_iter))
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--layerNum', default=2, type=int)
-    parser.add_argument('--unitNum', default=100, type=int)
-    parser.add_argument('--batchNum', default=64, type=int)
-    parser.add_argument('--learningRate', default=1e-4, type=float)
-    parser.add_argument('--epoch', default=100, type=int)
-    parser.add_argument('--modelName', type=str, required=True)
-    parser.add_argument('--mode', default='train', choices=['train', 'retrain', 'test'])
-
-    args = parser.parse_args()
-
-    print(args.modelName)
     if args.mode == 'train' or args.mode == 'retrain':
         features, labels = load_dataset(True)
-        print(features.shape, labels.shape)
         train(features, labels, args)
-    else: #TODO: test evaluation stage
+    else:  # TODO: test evaluation stage
         features, _ = load_dataset(False)
-        #features = np.array([
+        # features = np.array([
         evaluate(features, args)
