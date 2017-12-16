@@ -55,13 +55,11 @@ def train(features, labels, args):
     dataset = tf.data.Dataset.from_tensor_slices((features, labels))
     dataset = dataset.shuffle(buffer_size=10000)
     dataset = dataset.batch(args.batchNum)
-    # datset = dataset.repeat(3)  # Repeat the input indefinitely.
     iterator = dataset.make_initializable_iterator()
 
     feature, label = iterator.get_next()
 
     # Build model and optimizer
-    #network = fully_connect_model(feature, args.layerNum, args.unitNum, args.activator, args.initializer)
     network = build_model(feature, args)
     loss, opt = build_optimizer(network.outputs, label, args.learningRate)
 
@@ -107,14 +105,12 @@ def train(features, labels, args):
 
 # TODO: quantize output value [-5, 5]
 
-
 def evaluate(features, args):
     # Load Model
     sess = tf.InteractiveSession()
 
     # Build input pipepline
     dataset = tf.data.Dataset.from_tensor_slices(features)
-    #dataset = dataset.shuffle(buffer_size=10000)
     batched_dataset = dataset.batch(args.batchNum)
     iterator = batched_dataset.make_one_shot_iterator()
 
@@ -141,13 +137,10 @@ def evaluate(features, args):
             except tf.errors.OutOfRangeError:
                 break
 
-    #print('Average Test Error: %.4f' % (total_loss / total_iter))
-
 if __name__ == '__main__':
     if args.mode == 'train' or args.mode == 'retrain':
         features, labels = load_dataset(True)
         train(features, labels, args)
-    else:  # TODO: test evaluation stage
+    else:
         features, _ = load_dataset(False)
-        # features = np.array([
         evaluate(features, args)
