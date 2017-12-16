@@ -34,6 +34,19 @@ def train(features, labels, args):
 
     initialize_global_variables(sess)
 
+    if args.mode == 'retrain':
+        tl.files.load_ckpt(sess, args.modelName, is_latest=False)
+
+    ### tensorlayer already handle error ###
+    """
+    if args.mode == 'retrain':
+        try:
+            tl.files.load_ckpt(sess, args.modelName, is_latest=False, var_list=network.all_params)
+        except tf.errors.NotFoundError:
+            logging.exception('fail to load checkpoint file')
+            sys.exit()
+    """
+
     #Train
     for epoch in range(args.epoch):
         total_loss = 0
@@ -49,11 +62,11 @@ def train(features, labels, args):
                 break
 
         print('Epoch: %d \t Average Train Error: %.4f' % (epoch, total_loss / total_iter))
-        print(output_)
-        print(label_)
+        #print(output_)
+        #print(label_)
 
     #Save Model
-    tl.files.save_ckpt(sess, 'project2.ckpt', save_dir='checkpoint', var_list=tl.layers.get_variables_with_name('fully'))
+    tl.files.save_ckpt(sess, '%s'%(args.modelName), save_dir='checkpoint', var_list=tl.layers.get_variables_with_name('fully'))
 
 #TODO: quantize output value [-5, 5]
 def evaluate(features, args):
@@ -72,7 +85,7 @@ def evaluate(features, args):
     network = fully_connect_model(feature, args.layerNum, args.unitNum)
 
     initialize_global_variables(sess)
-    tl.files.load_ckpt(sess, args.modelName)
+    tl.files.load_ckpt(sess, args.modelName, is_latest=False)
 
     #Evaluate
     output_file_name = 'result.txt'
@@ -98,10 +111,11 @@ if __name__ == '__main__':
     parser.add_argument('--learningRate', default=1e-4, type=float)
     parser.add_argument('--epoch', default=100, type=int)
     parser.add_argument('--modelName', default='', type=str)
-    parser.add_argument('--mode', default='train', choices=['train', 'test'])
+    parser.add_argument('--mode', default='train', choices=['train', 'retrain', 'test'])
 
     args = parser.parse_args()
-    if args.mode == 'train':
+    print(args.modelName)
+    if args.mode == 'train' or args.mode == 'retrain':
         features, labels = load_dataset(True)
         print(features.shape, labels.shape)
         train(features, labels, args)
