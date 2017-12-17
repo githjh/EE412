@@ -17,12 +17,13 @@ parser.add_argument('--initializer', default='he', choices=['truncated_normal', 
 parser.add_argument('--lrelu_slope', default=0.1, type=float)
 parser.add_argument('--normal_stddev', default=0.1, type=float)
 parser.add_argument('--keep', default=0.5, type=float, help='dropout keep probability')
-parser.add_argument('--decay', default=0.9, type=float, help='batch normalization decay')
+parser.add_argument('--batchnorm_decay', default=0.9, type=float, help='batch normalization decay')
+parser.add_argument('--l2_decay', default=1e-3, type=float, help='batch normalization decay')
 
 #training hyper-parameter
 parser.add_argument('--batchNum', default=64, type=int)
 parser.add_argument('--learningRate', default=1e-4, type=float)
-parser.add_argument('--epoch', default=100, type=int)
+parser.add_argument('--epoch', default=30, type=int)
 
 #others
 parser.add_argument('--modelName', type=str, required=True)

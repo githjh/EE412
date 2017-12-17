@@ -18,10 +18,10 @@ def build_model(feature, args):
     elif args.model == 'fully_BN':
         if args.mode == 'train' or args.mode == 'retrain':
             model = fully_connect_BN_model(
-                feature, args.layerNum, args.unitNum, args.activator, args.initializer, True, args.decay, args.model)
+                feature, args.layerNum, args.unitNum, args.activator, args.initializer, True, args.batchnorm_decay, args.model)
         else:
             model = fully_connect_BN_model(
-                feature, args.layerNum, args.unitNum, args.activator, args.initializer, False, args.decay, args.model)
+                feature, args.layerNum, args.unitNum, args.activator, args.initializer, False, args.batchnorm_decay, args.model)
 
     elif args.model == 'fully_dropout':
         if args.mode == 'train' or args.mode == 'retrain':
@@ -36,18 +36,23 @@ def build_model(feature, args):
     return model
 
 
-def build_optimizer(output, label, learningRate):
+def build_optimizer(output, label, args, network_name):
     diff = output - label
-    #loss = tl.cost.mean_squared_error(output, label, is_mean=True)
     loss = tf.reduce_mean (tf.square(output - label))
     se = tf.reduce_sum (tf.square(output - label))
 
+    if args.l2_decay > 0:
+        weight_list = tl.layers.get_variables_with_name(network_name, train_only=True)
+        #print(weight_list)
+        l2_losses = [tf.nn.l2_loss(w) for w in weight_list]
+        l2_loss = tf.add_n(l2_losses)
+        loss += args.l2_decay * l2_loss
+
     train_vars = tl.layers.get_variables_with_name('fully', True, True)
-    opt = tf.train.AdamOptimizer(learningRate).minimize(
+    opt = tf.train.AdamOptimizer(args.learningRate).minimize(
         loss, var_list=train_vars)
 
-    return loss, se, opt
-
+    return loss, l2_loss, se, opt
 
 def train(features, labels, args):
     length = features.shape[0]
@@ -89,8 +94,8 @@ def train(features, labels, args):
         args.mode = 'test'
         valid_network = build_model(feature, args)
 
-    loss, se, opt = build_optimizer(train_network.outputs, label, args.learningRate)
-    loss_v, se_v, opt_v = build_optimizer(valid_network.outputs, label, args.learningRate)
+    loss, l2_loss, se, opt = build_optimizer(train_network.outputs, label, args, 'train')
+    _, _, se_v, _= build_optimizer(valid_network.outputs, label, args, 'valid')
 
     initialize_global_variables(sess)
 
@@ -108,9 +113,10 @@ def train(features, labels, args):
         sess.run(training_init_op)
         while True:
             try:
-                se_, loss_, _, output_, label_ = sess.run([se, loss, opt, train_network.outputs, label], feed_dict=feed_dict)
+                se_, loss_, l2_loss_, _, output_, label_ = sess.run([se, loss, l2_loss, opt, train_network.outputs, label], feed_dict=feed_dict)
                 total_train_se = total_train_se + se_
                 debug += len(output_)
+                #print('loss:{}, l2_loss:{}'.format(loss_, l2_loss_))
 
             except tf.errors.OutOfRangeError:
                 break
@@ -153,8 +159,6 @@ def train(features, labels, args):
 
     # Save Model
     tl.files.save_ckpt(sess, '%s' % (args.modelName), save_dir='checkpoint', var_list=train_network.all_params)
-
-# TODO: quantize output value [-5, 5]
 
 def evaluate(features, args):
     # Load Model
