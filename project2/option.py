@@ -27,7 +27,7 @@ parser.add_argument('--epoch', default=100, type=int)
 #others
 parser.add_argument('--modelName', type=str, required=True)
 parser.add_argument('--mode', default='train', choices=['train', 'retrain', 'test'])
-
+parser.add_argument('--validRatio', default=0.8, type=float)
 
 args = parser.parse_args()
 
