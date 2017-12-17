@@ -39,17 +39,19 @@ def build_model(feature, args):
 def build_optimizer(output, label, learningRate):
     diff = output - label
     #loss = tl.cost.mean_squared_error(output, label, is_mean=True)
-    loss = tf.reduce_mean(tf.square(output - label))
+    loss = tf.reduce_mean (tf.square(output - label))
+    sum_se = tf.reduce_sum (tf.square(output - label))
 
     train_vars = tl.layers.get_variables_with_name('fully', True, True)
     opt = tf.train.AdamOptimizer(learningRate).minimize(
         loss, var_list=train_vars)
 
-    return loss, opt
+    return sum_se, loss, opt
 
 
 def train(features, labels, args):
     sess = tf.InteractiveSession()
+    print ("train")
 
     # Build input pipepline
     dataset = tf.data.Dataset.from_tensor_slices((features, labels))
@@ -61,12 +63,13 @@ def train(features, labels, args):
 
     # Build model and optimizer
     network = build_model(feature, args)
-    loss, opt = build_optimizer(network.outputs, label, args.learningRate)
+    sum_se, loss, opt = build_optimizer(network.outputs, label, args.learningRate)
 
     initialize_global_variables(sess)
 
     if args.mode == 'retrain':
         tl.files.load_ckpt(sess, args.modelName, is_latest=False)
+        sys.exit (-1)
 
     ### tensorlayer already handle error ###
     """
@@ -86,28 +89,60 @@ def train(features, labels, args):
     for epoch in range(args.epoch):
         total_loss = 0
         total_iter = 0
+        total_se = 0
         sess.run(iterator.initializer)
 
         while True:
             try:
-                loss_, _, output_, label_ = sess.run([loss, opt, network.outputs, label], feed_dict=feed_dict)
+                sum_se_, loss_, _, output_, label_ = sess.run([sum_se, loss, opt, network.outputs, label], feed_dict=feed_dict)
+                total_se += sum_se_
                 total_loss = total_loss + loss_
                 total_iter = total_iter + 1  # might be subtituded by global step
             except tf.errors.OutOfRangeError:
                 break
 
         #TODO: tensorboard and evaluate validation error
-        print('Epoch: %d \t Average Train Error: %.4f' %
-              (epoch, total_loss / total_iter))
+        rmse = np.sqrt (total_se/features.shape[0])
+        print('Epoch: %d \t Average Train Error: %.4f, rmse: %.4f' %
+              (epoch, total_loss / total_iter, rmse))
 
     # Save Model
     tl.files.save_ckpt(sess, '%s' % (args.modelName), save_dir='checkpoint', var_list=network.all_params)
+
+def valid (features, labels, args):
+    # Load Model
+    sess = tf.InteractiveSession()
+    print ("valid")
+
+    # Build input pipepline
+    #dataset = tf.data.Dataset.from_tensor_slices(features)
+    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+    batched_dataset = dataset.batch(args.batchNum)
+    iterator = batched_dataset.make_one_shot_iterator()
+
+    #feature = iterator.get_next()
+    feature, label = iterator.get_next()
+
+    # Build model and optimizer
+    network = build_model(feature, args)
+
+    initialize_global_variables(sess)
+    tl.files.load_ckpt(sess, args.modelName, is_latest=False)
+    feed_dict = {}
+    feed_dict.update(network.all_drop)
+    sum_se, loss, _ = build_optimizer(network.outputs, label, args.learningRate)
+
+    sum_se_, loss_, output_, label_ = sess.run([sum_se, loss, network.outputs, label], feed_dict=feed_dict)
+
+    rmse = np.sqrt (loss_)
+    print ("validation: loss: %.4f, rmse: %.4f" % (loss_, rmse))
 
 # TODO: quantize output value [-5, 5]
 
 def evaluate(features, args):
     # Load Model
     sess = tf.InteractiveSession()
+    print ("test")
 
     # Build input pipepline
     dataset = tf.data.Dataset.from_tensor_slices(features)
@@ -121,6 +156,7 @@ def evaluate(features, args):
 
     initialize_global_variables(sess)
     tl.files.load_ckpt(sess, args.modelName, is_latest=False)
+    sys.exit (-1)
 
     # Evaluate
     output_file_name = 'result.txt'
@@ -138,9 +174,30 @@ def evaluate(features, args):
                 break
 
 if __name__ == '__main__':
-    if args.mode == 'train' or args.mode == 'retrain':
-        features, labels = load_dataset(True)
-        train(features, labels, args)
-    else:
+    
+    if args.mode == 'test':
         features, _ = load_dataset(False)
-        evaluate(features, args)
+        evaluate (features, args)
+
+    else:
+        features, labels = load_dataset(True)
+
+        length = features.shape[0]
+        train_length = int (0.8 * length + 0.5)
+        valid_length = length - train_length
+
+        train_features = features[:train_length, :]
+        train_labels   = labels  [:train_length]
+        valid_features = features[train_length:,:]
+        valid_labels   = labels  [train_length:]
+
+        print (features.shape, labels.shape)
+        print ("train set:", train_features.shape, train_labels.shape)
+        print ("valid set:", valid_features.shape, valid_labels.shape)
+
+        if args.mode == 'train' or args.mode == 'retrain':
+            train (train_features, train_labels, args)
+
+        elif args.mode == "valid":
+            valid (valid_features, valid_labels, args)
+
