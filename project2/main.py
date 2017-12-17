@@ -40,12 +40,13 @@ def build_optimizer(output, label, learningRate):
     diff = output - label
     #loss = tl.cost.mean_squared_error(output, label, is_mean=True)
     loss = tf.reduce_mean (tf.square(output - label))
+    se = tf.reduce_sum (tf.square(output - label))
 
     train_vars = tl.layers.get_variables_with_name('fully', True, True)
     opt = tf.train.AdamOptimizer(learningRate).minimize(
         loss, var_list=train_vars)
 
-    return loss, opt
+    return loss, se, opt
 
 
 def train(features, labels, args):
@@ -83,55 +84,58 @@ def train(features, labels, args):
 
     # Build model and optimizer
     network = build_model(feature, args)
-    loss, opt = build_optimizer(network.outputs, label, args.learningRate)
+    loss, se, opt = build_optimizer(network.outputs, label, args.learningRate)
 
     initialize_global_variables(sess)
 
     if args.mode == 'retrain':
         tl.files.load_ckpt(sess, args.modelName, is_latest=False)
 
-    feed_dict = {}
-    feed_dict.update(network.all_drop)
-
     #Training and Validation
     for epoch in range(args.epoch):
 
         #Training Stage
-        total_train_loss = 0
+        total_train_se = 0
         debug = 0
+        feed_dict = {}
+        feed_dict.update(network.all_drop)
         sess.run(training_init_op)
         while True:
             try:
-                loss_, _, output_, label_ = sess.run([loss, opt, network.outputs, label], feed_dict=feed_dict)
-                total_train_loss = total_train_loss + loss_
+                se_, loss_, _, output_, label_ = sess.run([se, loss, opt, network.outputs, label], feed_dict=feed_dict)
+                total_train_se = total_train_se + se_
                 debug += len(output_)
 
             except tf.errors.OutOfRangeError:
                 break
 
-        print('Train data number: {}'.format(debug))
+        print('Train data number: {}, {}'.format(debug, train_features.shape[0]))
 
         #Validation Stage
         if valid_features.shape[0] != 0:
-            total_valid_loss = 0
+            total_valid_se = 0
             debug = 0
+            dp_dict = tl.utils.dict_to_one( network.all_drop ) # disable noise layers
+            feed_dict = {}
+            feed_dict.update(dp_dict)
+
             sess.run(validation_init_op)
             while True:
                 try:
-                    loss_, _, output_, label_ = sess.run([loss, opt, network.outputs, label], feed_dict=feed_dict)
-                    total_valid_loss = total_valid_loss + loss_
+                    se_ = sess.run(se, feed_dict=feed_dict)
+                    total_valid_se = total_valid_se + se_
                     debug += len(output_)
 
                 except tf.errors.OutOfRangeError:
                     break
 
         else:
-            total_valid_loss = -1 #Unknown validation loss
+            total_valid_se = -1 #Unknown validation loss
 
-        print('Validation data number: {}'.format(debug))
+        print('Validation data number: {}, {}'.format(debug, valid_features.shape[0]))
 
-        train_RMSE = np.sqrt (total_train_loss/train_features.shape[0])
-        valid_RMSE = np.sqrt (total_valid_loss/valid_features.shape[0])
+        train_RMSE = np.sqrt (total_train_se/train_features.shape[0])
+        valid_RMSE = np.sqrt (total_valid_se/valid_features.shape[0])
         print('Epoch: %d \t Train RMSE: %.4f, Validation RMSE: %.4f' % (epoch, train_RMSE, valid_RMSE))
 
     #TODO: tensorboard and evaluate validation error
