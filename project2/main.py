@@ -74,8 +74,7 @@ def train(features, labels, args):
     valid_dataset = tf.data.Dataset.from_tensor_slices((valid_features, valid_labels))
     valid_dataset = valid_dataset.batch(args.batchNum)
 
-    iterator = tf.data.Iterator.from_structure(train_dataset.output_types,
-                                           train_dataset.output_shapes)
+    iterator = tf.data.Iterator.from_structure(train_dataset.output_types, train_dataset.output_shapes)
 
     feature, label = iterator.get_next()
 
@@ -83,8 +82,15 @@ def train(features, labels, args):
     validation_init_op = iterator.make_initializer(valid_dataset)
 
     # Build model and optimizer
-    network = build_model(feature, args)
-    loss, se, opt = build_optimizer(network.outputs, label, args.learningRate)
+    with tf.variable_scope('train'):
+        train_network = build_model(feature, args)
+
+    with tf.variable_scope('valid'):
+        args.mode = 'test'
+        valid_network = build_model(feature, args)
+
+    loss, se, opt = build_optimizer(train_network.outputs, label, args.learningRate)
+    loss_v, se_v, opt_v = build_optimizer(valid_network.outputs, label, args.learningRate)
 
     initialize_global_variables(sess)
 
@@ -98,11 +104,11 @@ def train(features, labels, args):
         total_train_se = 0
         debug = 0
         feed_dict = {}
-        feed_dict.update(network.all_drop)
+        feed_dict.update(train_network.all_drop)
         sess.run(training_init_op)
         while True:
             try:
-                se_, loss_, _, output_, label_ = sess.run([se, loss, opt, network.outputs, label], feed_dict=feed_dict)
+                se_, loss_, _, output_, label_ = sess.run([se, loss, opt, train_network.outputs, label], feed_dict=feed_dict)
                 total_train_se = total_train_se + se_
                 debug += len(output_)
 
@@ -112,17 +118,22 @@ def train(features, labels, args):
         print('Train data number: {}, {}'.format(debug, train_features.shape[0]))
 
         #Validation Stage
+        train_variables_list = train_network.all_params
+        valid_variables_list = valid_network.all_params
+        for i in range(len(train_variables_list)):
+            sess.run(tf.assign(valid_variables_list[i], train_variables_list[i]))
+
         if valid_features.shape[0] != 0:
             total_valid_se = 0
             debug = 0
-            dp_dict = tl.utils.dict_to_one( network.all_drop ) # disable noise layers
-            feed_dict = {}
-            feed_dict.update(dp_dict)
+            #dp_dict = tl.utils.dict_to_one( network.all_drop ) # disable noise layers
+            #feed_dict = {}
+            #feed_dict.update(dp_dict)
 
             sess.run(validation_init_op)
             while True:
                 try:
-                    se_ = sess.run(se, feed_dict=feed_dict)
+                    se_ = sess.run(se_v, feed_dict=feed_dict)
                     total_valid_se = total_valid_se + se_
                     debug += len(output_)
 
@@ -141,7 +152,7 @@ def train(features, labels, args):
     #TODO: tensorboard and evaluate validation error
 
     # Save Model
-    tl.files.save_ckpt(sess, '%s' % (args.modelName), save_dir='checkpoint', var_list=network.all_params)
+    tl.files.save_ckpt(sess, '%s' % (args.modelName), save_dir='checkpoint', var_list=train_network.all_params)
 
 # TODO: quantize output value [-5, 5]
 

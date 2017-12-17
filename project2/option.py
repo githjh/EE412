@@ -17,7 +17,7 @@ parser.add_argument('--initializer', default='he', choices=['truncated_normal', 
 parser.add_argument('--lrelu_slope', default=0.1, type=float)
 parser.add_argument('--normal_stddev', default=0.1, type=float)
 parser.add_argument('--keep', default=0.5, type=float, help='dropout keep probability')
-parser.add_argument('--decay', default=0.99, type=float, help='batch normalization decay')
+parser.add_argument('--decay', default=0.9, type=float, help='batch normalization decay')
 
 #training hyper-parameter
 parser.add_argument('--batchNum', default=64, type=int)
