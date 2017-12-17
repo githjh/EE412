@@ -133,7 +133,7 @@ def train(features, labels, args):
             sess.run(validation_init_op)
             while True:
                 try:
-                    se_ = sess.run(se_v, feed_dict=feed_dict)
+                    se_, output_ = sess.run([se_v, valid_network.outputs], feed_dict=feed_dict)
                     total_valid_se = total_valid_se + se_
                     debug += len(output_)
 
